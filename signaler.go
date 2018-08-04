@@ -1,6 +1,7 @@
 package dcnet
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -45,18 +46,26 @@ func (r *RWSignaler) Accept() (*webrtc.RTCDataChannel, net.Addr, error) {
 		return nil, nil, err
 	}
 
+	var dc *webrtc.DataC
+
 	if r.initiate {
-		// TODO: Create DataChannel (See pions/webrtc#55)
-		// dc, err := c.CreateDataChannel()
+		dc, err := c.CreateDataChannel("data", nil)
+		if err != nil {
+			return nil, nil, err
+		}
 
 		offer, err := c.CreateOffer(nil)
 		if err != nil {
 			return nil, nil, err
 		}
 
-		// TODO: serialize entire offer instead
-		// TODO: Don't assume we can write the entire offer at once?
-		_, err = r.c.Write([]byte(offer.Sdp))
+		b, err := json.Marshal(offer)
+		if err != nil {
+			return err
+		}
+
+		// TODO: Don't assume we can write the entire offer at once
+		_, err = r.c.Write(b)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -64,15 +73,19 @@ func (r *RWSignaler) Accept() (*webrtc.RTCDataChannel, net.Addr, error) {
 
 	go func() {
 		for {
-			b, err := ioutil.ReadAll(r.c)
+			b, err := ioutil.ReadAll(r.c) // Blocks forever?
 			if err != nil {
 				// TODO: Return error from Accept()
 				log.Println(err)
 			}
-			desc := webrtc.RTCSessionDescription{
-				Type: webrtc.RTCSdpTypeOffer, // TODO: Don't assume to receive an offer
-				Sdp:  string(sd),
+
+			var desc webrtc.RTCSessionDescription
+			err = json.Unmarshal(b, &desc)
+			if err != nil {
+				// TODO: Return error from Accept()
+				log.Println(err)
 			}
+
 			if err := peerConnection.SetRemoteDescription(desc); err != nil {
 				panic(err)
 			}
