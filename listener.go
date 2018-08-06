@@ -16,13 +16,13 @@ func NewListener(s Signaler) (*Listener, error) {
 	return res, nil
 }
 
-func (l *Listener) Accept() (Conn, error) {
-	dc, raddr, err := <-l.s.Accept()
+func (l *Listener) Accept() (net.Conn, error) {
+	dc, raddr, err := l.s.Accept()
 	if err != nil {
 		return nil, err
 	}
 
-	conn, err := NewConn(dc, s.Addr(), raddr)
+	conn, err := NewConn(dc, l.s.Addr(), raddr)
 	if err != nil {
 		return nil, err
 	}
@@ -31,9 +31,9 @@ func (l *Listener) Accept() (Conn, error) {
 }
 
 func (l *Listener) Close() error {
-	l.s.Close()
+	return l.s.Close()
 }
 
 func (l *Listener) Addr() net.Addr {
-	return l.s.Addr
+	return l.s.Addr()
 }

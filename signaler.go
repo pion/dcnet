@@ -23,16 +23,16 @@ type Signaler interface {
 // It plainy exchanges the SDP offer/answer without peer address.
 type RWSignaler struct {
 	c        io.ReadWriteCloser
-	config   webrtc.RTCPeerConfiguration // Maybe make this global?
+	config   webrtc.RTCConfiguration // Maybe make this global?
 	initiate bool
 }
 
 // NewRWSignaler creates a new RWSignaler
-func NewRWSignaler(c io.ReadWriteCloser, rtcconfig webrtc.RTCPeerConfiguration, initiate bool) (*RWSignaler, error) {
+func NewRWSignaler(c io.ReadWriteCloser, rtcconfig webrtc.RTCConfiguration, initiate bool) (*RWSignaler, error) {
 	s := &RWSignaler{
-		c:      c,
-		config: rtcconfig,
-		initiate, initiate,
+		c:        c,
+		config:   rtcconfig,
+		initiate: initiate,
 	}
 
 	return s, nil
@@ -46,10 +46,11 @@ func (r *RWSignaler) Accept() (*webrtc.RTCDataChannel, net.Addr, error) {
 		return nil, nil, err
 	}
 
-	var dc *webrtc.DataC
+	var dc *webrtc.RTCDataChannel
+	var addr net.Addr
 
 	if r.initiate {
-		dc, err := c.CreateDataChannel("data", nil)
+		dc, err = c.CreateDataChannel("data", nil)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -61,19 +62,30 @@ func (r *RWSignaler) Accept() (*webrtc.RTCDataChannel, net.Addr, error) {
 
 		b, err := json.Marshal(offer)
 		if err != nil {
-			return err
+			return nil, nil, err
 		}
 
-		// TODO: Don't assume we can write the entire offer at once
-		_, err = r.c.Write(b)
+		f, err := NewRTPFrameWriter(len(b), r.c)
 		if err != nil {
 			return nil, nil, err
 		}
+
+		// TODO: Don't assume we can write the entire offer at once
+		_, err = f.Write(b)
+		if err != nil {
+			return nil, nil, err
+		}
+		addr = &NilAddr{}
 	}
 
 	go func() {
 		for {
-			b, err := ioutil.ReadAll(r.c) // Blocks forever?
+			f, err := NewRTPFrameReader(r.c)
+			if err != nil {
+				// TODO: Return error from Accept()
+				log.Println(err)
+			}
+			b, err := ioutil.ReadAll(f)
 			if err != nil {
 				// TODO: Return error from Accept()
 				log.Println(err)
@@ -86,16 +98,30 @@ func (r *RWSignaler) Accept() (*webrtc.RTCDataChannel, net.Addr, error) {
 				log.Println(err)
 			}
 
-			if err := peerConnection.SetRemoteDescription(desc); err != nil {
+			if err := c.SetRemoteDescription(desc); err != nil {
 				panic(err)
 			}
 			if desc.Type == webrtc.RTCSdpTypeOffer {
 				// Sets the LocalDescription, and starts our UDP listeners
-				answer, err := peerConnection.CreateAnswer(nil)
+				answer, err := c.CreateAnswer(nil)
 				if err != nil {
 					panic(err)
 				}
-				_, err = r.c.Write(p)
+
+				b, err := json.Marshal(answer)
+				if err != nil {
+					// TODO: Return error from Accept()
+					log.Println(err)
+				}
+
+				f, err := NewRTPFrameWriter(len(b), r.c)
+				if err != nil {
+					// TODO: Return error from Accept()
+					log.Println(err)
+				}
+
+				// TODO: Don't assume we can write the entire answer at once
+				_, err = f.Write(b)
 				if err != nil {
 					// TODO: Return error from Accept()
 					log.Println(err)
@@ -104,30 +130,34 @@ func (r *RWSignaler) Accept() (*webrtc.RTCDataChannel, net.Addr, error) {
 		}
 	}()
 
-	res := make(chan struct {
-		d *webrtc.RTCDataChannel
-		a net.Addr
-	})
-
-	c.Ondatachannel = func(d *webrtc.RTCDataChannel) {
-		fmt.Printf("New DataChannel %s %d\n", d.Label, d.ID)
-		res <- struct {
+	if dc == nil {
+		res := make(chan struct {
 			d *webrtc.RTCDataChannel
 			a net.Addr
-		}{
-			d: d,
-			a: &NilAddr{},
+		})
+
+		c.Ondatachannel = func(d *webrtc.RTCDataChannel) {
+			fmt.Printf("New DataChannel %s %d\n", d.Label, d.ID)
+			res <- struct {
+				d *webrtc.RTCDataChannel
+				a net.Addr
+			}{
+				d: d,
+				a: &NilAddr{},
+			}
 		}
+
+		e := <-res
+		dc = e.d
+		addr = e.a
 	}
 
-	e := <-res
-
-	return e.d, e.a, nil
+	return dc, addr, nil
 }
 
 // Close closed the ReadWriteCloser
 func (r *RWSignaler) Close() error {
-	return c.Close()
+	return r.c.Close()
 }
 
 func (r *RWSignaler) Addr() net.Addr {
@@ -149,20 +179,22 @@ func NewMultiSignaler(set ...Signaler) (*MultiSignaler, error) {
 
 func (s *MultiSignaler) Accept() (*webrtc.RTCDataChannel, net.Addr, error) {
 	// TODO: accept on all signalers
+	panic("TODO")
+	return nil, nil, nil
 }
 
 func (s *MultiSignaler) Close() error {
-	var closeerr error
+	var closeErr error
 	for _, signaler := range s.s {
 		err := signaler.Close()
 		if err != nil {
-			closeerr = err
+			closeErr = err
 		}
 	}
-	return closeerr
+	return closeErr
 }
 
 func (s *MultiSignaler) Addr() net.Addr {
 	// We assume all signalers use the same addr
-	return s[0].Addr()
+	return s.s[0].Addr()
 }
