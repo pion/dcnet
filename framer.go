@@ -141,7 +141,9 @@ func (f *RTPFrameWriter) Write(p []byte) (n int, err error) {
 		f.inFrame = true
 	}
 
-	n, err = f.c.Write(p)
+	if len(p) > 0 {
+		n, err = f.c.Write(p)
+	}
 
 	f.curLength = f.curLength + uint16(n)
 

@@ -1,0 +1,1 @@
+Package dcnet augments the net.* interfaces over a WebRTC datachannel.
