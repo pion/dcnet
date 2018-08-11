@@ -3,12 +3,16 @@ package dcnet
 import (
 	"io"
 	"io/ioutil"
-	"log"
 	"math/rand"
 	"strconv"
 	"testing"
 	"time"
 )
+
+// Interface assertions
+var _ Framer = (*RTPFramer)(nil)
+var _ FrameReader = (*RTPFrameReader)(nil)
+var _ FrameWriter = (*RTPFrameWriter)(nil)
 
 func TestRTPFramer(t *testing.T) {
 
@@ -24,15 +28,13 @@ func TestRTPFramer(t *testing.T) {
 		// TODO: make the pipe split the message
 		pr, pw := io.Pipe()
 
-		log.Println("TestCase: " + testCase.sequence)
-
 		r, err := NewRTPFrameReader(pr)
 		if err != nil {
 			t.Fatalf("failed to create frame reader: %v", err)
 		}
 		defer r.Close()
 
-		t.Run("NewRTPFramer"+strconv.Itoa(i), func(t *testing.T) {
+		t.Run("NewRTPFramer_"+strconv.Itoa(i), func(t *testing.T) {
 
 			w, err := NewRTPFrameWriter(len(testCase.sequence), pw)
 			if err != nil {

@@ -11,7 +11,6 @@ import (
 	"github.com/pions/webrtc"
 )
 
-// Addr + Signaler -> DataChannel
 // Signaler
 type Signaler interface {
 	Accept() (*webrtc.RTCDataChannel, net.Addr, error)
@@ -28,14 +27,14 @@ type RWSignaler struct {
 }
 
 // NewRWSignaler creates a new RWSignaler
-func NewRWSignaler(c io.ReadWriteCloser, rtcconfig webrtc.RTCConfiguration, initiate bool) (*RWSignaler, error) {
+func NewRWSignaler(c io.ReadWriteCloser, rtcconfig webrtc.RTCConfiguration, initiate bool) *RWSignaler {
 	s := &RWSignaler{
 		c:        c,
 		config:   rtcconfig,
 		initiate: initiate,
 	}
 
-	return s, nil
+	return s
 }
 
 // Accept creates WebRTC DataChannels by signaling over the ReadWriteCloser
@@ -55,6 +54,7 @@ func (r *RWSignaler) Accept() (*webrtc.RTCDataChannel, net.Addr, error) {
 			return nil, nil, err
 		}
 
+		// TODO: migrate to OnNegotiationNeeded when available
 		offer, err := c.CreateOffer(nil)
 		if err != nil {
 			return nil, nil, err
