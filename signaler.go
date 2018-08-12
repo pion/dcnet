@@ -65,6 +65,8 @@ func (r *RWSignaler) Accept() (*webrtc.RTCDataChannel, net.Addr, error) {
 			return nil, nil, err
 		}
 
+		fmt.Println("Sending initial offer", string(b))
+		fmt.Println()
 		f, err := NewRTPFrameWriter(len(b), r.c)
 		if err != nil {
 			return nil, nil, err
@@ -91,6 +93,7 @@ func (r *RWSignaler) Accept() (*webrtc.RTCDataChannel, net.Addr, error) {
 				log.Println(err)
 			}
 
+			fmt.Println()
 			var desc webrtc.RTCSessionDescription
 			err = json.Unmarshal(b, &desc)
 			if err != nil {
@@ -101,6 +104,8 @@ func (r *RWSignaler) Accept() (*webrtc.RTCDataChannel, net.Addr, error) {
 			if err := c.SetRemoteDescription(desc); err != nil {
 				panic(err)
 			}
+			fmt.Println("Got", desc.Type, string(b))
+			log.Println(desc.Type, webrtc.RTCSdpTypeOffer, desc.Type == webrtc.RTCSdpTypeOffer)
 			if desc.Type == webrtc.RTCSdpTypeOffer {
 				// Sets the LocalDescription, and starts our UDP listeners
 				answer, err := c.CreateAnswer(nil)
@@ -114,6 +119,8 @@ func (r *RWSignaler) Accept() (*webrtc.RTCDataChannel, net.Addr, error) {
 					log.Println(err)
 				}
 
+				fmt.Println("Sending answer", string(b))
+				fmt.Println()
 				f, err := NewRTPFrameWriter(len(b), r.c)
 				if err != nil {
 					// TODO: Return error from Accept()

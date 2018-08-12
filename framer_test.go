@@ -44,10 +44,11 @@ func TestRTPFramer(t *testing.T) {
 
 			done := make(chan struct{})
 
-			time.AfterFunc(time.Second*2, func() {
-				// Avoid extreme waiting time on blocking bugs
+			// Avoid extreme waiting time on blocking bugs
+			lim := time.AfterFunc(time.Second*2, func() {
 				panic("timeout")
 			})
+			defer lim.Stop()
 
 			go func() {
 				defer close(done)
