@@ -9,6 +9,7 @@ import (
 	"github.com/pions/webrtc/pkg/datachannel"
 )
 
+// NewConn creates a Conn around a data channel. The data channel is assumed to be open already.
 func NewConn(dc *webrtc.RTCDataChannel, laddr net.Addr, raddr net.Addr) (net.Conn, error) {
 	r, w := io.Pipe()
 

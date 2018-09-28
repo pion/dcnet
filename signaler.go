@@ -13,33 +13,40 @@ import (
 
 // Signaler
 type Signaler interface {
+	Dial() (*webrtc.RTCDataChannel, net.Addr, error)
 	Accept() (*webrtc.RTCDataChannel, net.Addr, error)
 	Close() error
 	Addr() net.Addr
 }
 
 // RWSignaler is a simple signaler over an io.ReadWriteCloser
-// It plainy exchanges the SDP offer/answer without peer address.
+// It plainly exchanges the SDP offer/answer without peer address.
 type RWSignaler struct {
-	c        io.ReadWriteCloser
-	config   webrtc.RTCConfiguration // Maybe make this global?
-	initiate bool
+	c      io.ReadWriteCloser
+	config webrtc.RTCConfiguration // Maybe make this global?
 }
 
 // NewRWSignaler creates a new RWSignaler
-func NewRWSignaler(c io.ReadWriteCloser, rtcconfig webrtc.RTCConfiguration, initiate bool) *RWSignaler {
+func NewRWSignaler(c io.ReadWriteCloser, rtcconfig webrtc.RTCConfiguration) *RWSignaler {
 	s := &RWSignaler{
-		c:        c,
-		config:   rtcconfig,
-		initiate: initiate,
+		c:      c,
+		config: rtcconfig,
 	}
 
 	return s
 }
 
 // Accept creates WebRTC DataChannels by signaling over the ReadWriteCloser
-// TODO: Abstract further?
+func (r *RWSignaler) Dial() (*webrtc.RTCDataChannel, net.Addr, error) {
+	return r.doSignal(true)
+}
+
+// Accept creates WebRTC DataChannels by signaling over the ReadWriteCloser
 func (r *RWSignaler) Accept() (*webrtc.RTCDataChannel, net.Addr, error) {
+	return r.doSignal(false)
+}
+
+func (r *RWSignaler) doSignal(init bool) (*webrtc.RTCDataChannel, net.Addr, error) {
 	c, err := webrtc.New(r.config)
 	if err != nil {
 		return nil, nil, err
@@ -48,7 +55,7 @@ func (r *RWSignaler) Accept() (*webrtc.RTCDataChannel, net.Addr, error) {
 	var dc *webrtc.RTCDataChannel
 	var addr net.Addr
 
-	if r.initiate {
+	if init {
 		dc, err = c.CreateDataChannel("data", nil)
 		if err != nil {
 			return nil, nil, err
@@ -143,7 +150,7 @@ func (r *RWSignaler) Accept() (*webrtc.RTCDataChannel, net.Addr, error) {
 			a net.Addr
 		})
 
-		c.Ondatachannel = func(d *webrtc.RTCDataChannel) {
+		c.OnDataChannel = func(d *webrtc.RTCDataChannel) {
 			fmt.Printf("New DataChannel %s %d\n", d.Label, d.ID)
 			res <- struct {
 				d *webrtc.RTCDataChannel

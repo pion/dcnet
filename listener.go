@@ -1,19 +1,24 @@
 package dcnet
 
-import "net"
+import (
+	"net"
+
+	"github.com/pions/webrtc"
+)
 
 // Listener creates an io.listener around an existing RTCPeerConnection
 // It is up to the supplier of the RTCPeerConnection to
 type Listener struct {
-	s Signaler
+	s    Signaler
+	addr net.Addr
 }
 
-func NewListener(s Signaler) (*Listener, error) {
+func NewListener(s Signaler) *Listener {
 	res := &Listener{
 		s: s,
 	}
 
-	return res, nil
+	return res
 }
 
 func (l *Listener) Accept() (net.Conn, error) {
@@ -22,12 +27,32 @@ func (l *Listener) Accept() (net.Conn, error) {
 		return nil, err
 	}
 
+	// Ensure the channel is open
+	ensureOpen(dc)
+
 	conn, err := NewConn(dc, l.s.Addr(), raddr)
 	if err != nil {
 		return nil, err
 	}
 
 	return conn, nil
+}
+
+func ensureOpen(dc *webrtc.RTCDataChannel) {
+	done := make(chan struct{})
+	open := func() {
+		select {
+		case <-done:
+		default:
+			close(done)
+		}
+	}
+	dc.OnOpen = open
+
+	if dc.ReadyState == webrtc.RTCDataChannelStateOpen {
+		open()
+	}
+	<-done
 }
 
 func (l *Listener) Close() error {

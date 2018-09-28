@@ -45,7 +45,6 @@ func validateAccept(t *testing.T, name string, sig Signaler) chan struct{} {
 		}
 		log.Println("Accept on", name)
 
-		// TODO: test sending something once pions to pions works
 	}()
 
 	return done
