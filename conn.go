@@ -1,6 +1,8 @@
 package dcnet
 
 import (
+	"errors"
+	"fmt"
 	"io"
 	"net"
 	"time"
@@ -40,19 +42,27 @@ func NewConn(dc *webrtc.RTCDataChannel, laddr net.Addr, raddr net.Addr) (net.Con
 
 // Conn is a net.Conn over a datachannel
 type Conn struct {
-	dc    *webrtc.RTCDataChannel
-	laddr net.Addr
-	raddr net.Addr
-	p     *io.PipeReader
+	dc       *webrtc.RTCDataChannel
+	laddr    net.Addr
+	raddr    net.Addr
+	p        *io.PipeReader
+	isClosed bool
 }
 
 // Read reads data from the underlying the data channel
 func (c *Conn) Read(b []byte) (int, error) {
-	return c.p.Read(b)
+	if c.isClosed {
+		return 0, errors.New("read on closed conn")
+	}
+	i, err := c.p.Read(b)
+	return i, err
 }
 
 // Write writes the data to the underlying data channel
 func (c *Conn) Write(b []byte) (int, error) {
+	if c.isClosed {
+		return 0, errors.New("write on closed conn")
+	}
 	err := c.dc.Send(datachannel.PayloadBinary{Data: b})
 	if err != nil {
 		return 0, err
@@ -62,6 +72,21 @@ func (c *Conn) Write(b []byte) (int, error) {
 
 // Close closes the datachannel and peerconnection
 func (c *Conn) Close() error {
+
+	if c.isClosed {
+		return errors.New("close on closed conn")
+	}
+
+	// TODO: Locking
+	c.isClosed = true
+
+	// Unblock readers
+	err := c.p.Close()
+	if err != nil {
+		fmt.Println("failed to close pipe:", err)
+		return err
+	}
+
 	// TODO: Implement datachannel closing procedure
 	// c.dc.Close()
 	// TODO: cleanup peerconnection
